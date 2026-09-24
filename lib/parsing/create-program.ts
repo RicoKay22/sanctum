@@ -1,14 +1,13 @@
 import { db, type Program } from '../db/schema';
-import { parseServiceText, type ParseResult } from './parse-service';
+import { parseServiceTextAction } from './parse-action';
 
-// 30 days matches the standing temp-storage rule (Part D).
-const EXPIRY_DAYS = 30;
+const EXPIRY_DAYS = 30; // matches the standing temp-storage rule (Part D)
 
 export async function createProgramFromText(
   workspaceId: string,
   title: string,
   rawText: string
-): Promise<{ program: Program; result: ParseResult }> {
+) {
   const now = new Date();
   const expires = new Date(now.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
@@ -22,7 +21,7 @@ export async function createProgramFromText(
     expiresAt: expires.toISOString(),
   };
 
-  const result = parseServiceText(program.id, rawText);
+  const result = await parseServiceTextAction(program.id, rawText);
 
   await db.programs.add(program);
   await db.sections.bulkAdd(result.sections);

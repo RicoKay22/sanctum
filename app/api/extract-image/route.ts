@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Server route (not a Server Action) because it needs to accept
-// multipart/form-data (the raw image file) — Server Actions handle this
-// awkwardly. Keeps GEMINI_API_KEY server-side, same principle as
-// parse-action.ts.
 export async function POST(req: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ text: null }, { status: 200 });
+  if (!apiKey) {
+    console.error('[extract-image] GEMINI_API_KEY is not set');
+    return NextResponse.json({ text: null, error: 'no_api_key' }, { status: 200 });
+  }
 
   const formData = await req.formData();
   const file = formData.get('image') as File | null;
@@ -31,12 +30,23 @@ export async function POST(req: NextRequest) {
         }),
       }
     );
-    if (!res.ok) return NextResponse.json({ text: null }, { status: 200 });
 
     const data = await res.json();
+
+    if (!res.ok) {
+      console.error('[extract-image] Gemini API error:', res.status, JSON.stringify(data));
+      return NextResponse.json({ text: null, error: `gemini_${res.status}` }, { status: 200 });
+    }
+
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? null;
+    if (!text) {
+      console.error('[extract-image] Gemini returned no text. Full response:', JSON.stringify(data));
+      return NextResponse.json({ text: null, error: 'empty_response' }, { status: 200 });
+    }
+
     return NextResponse.json({ text });
-  } catch {
-    return NextResponse.json({ text: null }, { status: 200 });
+  } catch (err) {
+    console.error('[extract-image] Fetch threw:', err);
+    return NextResponse.json({ text: null, error: 'fetch_failed' }, { status: 200 });
   }
 }

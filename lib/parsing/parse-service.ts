@@ -7,7 +7,7 @@ export interface ParseResult {
   sections: Section[];
   needsReview: number;
   aiAssisted: number;
-  autoAddedTitles: string[]; // appendix content with no matching order item — auto-appended as its own slide, surfaced here for transparency (not silently dropped)
+  autoAddedTitles: string[];
 }
 
 export async function parseServiceText(programId: Program['id'], rawText: string): Promise<ParseResult> {
@@ -42,13 +42,8 @@ export async function parseServiceText(programId: Program['id'], rawText: string
     const target = type ? sections.find((s) => s.type === type) : undefined;
 
     if (target) {
-      // Real order item already exists for this heading — attach as its
-      // authoritative full text rather than duplicating as a new slide.
       target.fullText = block.body;
     } else {
-      // No matching order item — this appendix content gets its own slide
-      // rather than being silently lost. Order continues after the last
-      // real item; type inferred where possible, 'other' otherwise.
       sections.push({
         id: crypto.randomUUID(),
         programId,

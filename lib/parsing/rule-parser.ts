@@ -28,6 +28,43 @@ function stripListMarker(line: string): string {
   return line.replace(/^\s*(?:\d+\.|\(?[a-z]\)\.?|\(?[ivxlcdm]+\)\.?|[-–•])\s+/i, '').trim();
 }
 
+// Fallback for input where strict sequential numbering (1. 2. 3...) can't
+// be found — typically OCR-garbled images where digits/periods get dropped
+// or misread. Classifies every line independently instead of returning
+// nothing. Worse output beats empty output.
+function parseFlatFallback(rawLines: string[]): ParsedLine[] {
+  return rawLines.map((rawLine) => {
+    const line = stripListMarker(rawLine);
+    const colonIdx = line.indexOf(':');
+    const label = colonIdx === -1 ? line : line.slice(0, colonIdx).trim();
+    const value = colonIdx === -1 ? '' : line.slice(colonIdx + 1).trim();
+    const type = matchSectionType(label);
+
+    if (!type) return { section: { type: 'other' as const, title: line, resolved: false }, confidence: 0 };
+
+    if (type === 'reading' || type === 'psalm') {
+      const ref = extractBibleReference(value || line);
+      return {
+        section: {
+          type,
+          title: label,
+          reference: ref ? `${ref.book} ${ref.chapter}:${ref.verseStart}${ref.verseEnd ? '-' + ref.verseEnd : ''}` : undefined,
+          resolved: false,
+        },
+        confidence: ref ? 1 : 0.5,
+      };
+    }
+    if (type === 'hymn') {
+      const number = extractHymnNumber(value || line);
+      return {
+        section: { type, title: label, reference: number ? String(number) : undefined, resolved: false },
+        confidence: number ? 1 : 0.5,
+      };
+    }
+    return { section: { type, title: value || label, resolved: false }, confidence: 1 };
+  });
+}
+
 export function parseServiceLines(rawText: string): RuleParseResult {
   const rawLines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
 
@@ -41,7 +78,11 @@ export function parseServiceLines(rawText: string): RuleParseResult {
     }
   }
 
-  const headerLines = markers.length ? rawLines.slice(0, markers[0].index) : [];
+  if (markers.length < 3) {
+    return { orderItems: parseFlatFallback(rawLines), referenceBlocks: [] };
+  }
+
+  const headerLines = rawLines.slice(0, markers[0].index);
   const orderItems: ParsedLine[] = headerLines.map((line) => ({
     section: { type: 'other' as const, title: line, resolved: false },
     confidence: 0,

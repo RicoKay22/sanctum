@@ -16,16 +16,8 @@ export interface RuleParseResult {
   referenceBlocks: ReferenceBlock[];
 }
 
-// A real numbered order-of-service line: "1. Processional Hymn — CONH 171".
-// Must be strictly sequential (1, 2, 3...) to avoid false-matching a stray
-// number elsewhere in the document (verse numbers, offering categories).
 const TOP_LEVEL_MARKER = /^(\d{1,2})\.\s+(.*)/;
 
-// A line that reads as a heading inside an appendix/reference zone —
-// e.g. "ADDITIONAL SERVICE CONTENT", "Collects", "Apostles' Creed" alone
-// on its own line. Deliberately loose: a false positive just means a block
-// doesn't merge into a section (harmless); a false negative just means a
-// heading gets folded into the previous block's body (also harmless).
 function isHeadingLike(line: string): boolean {
   const allCaps = line === line.toUpperCase() && /[A-Z]/.test(line);
   const shortKnownLabel = line.length <= 40 && !line.includes(':') && matchSectionType(line) !== null;
@@ -49,7 +41,6 @@ export function parseServiceLines(rawText: string): RuleParseResult {
     }
   }
 
-  // Lines before item 1 — service metadata (Cantor, readers, theme).
   const headerLines = markers.length ? rawLines.slice(0, markers[0].index) : [];
   const orderItems: ParsedLine[] = headerLines.map((line) => ({
     section: { type: 'other' as const, title: line, resolved: false },
@@ -63,8 +54,6 @@ export function parseServiceLines(rawText: string): RuleParseResult {
 
     for (let i = marker.index + 1; i < blockEnd; i++) {
       const line = rawLines[i];
-      // Inside the LAST item's block, an all-caps heading signals the
-      // start of the appendix zone — stop absorbing into this item.
       if (m === markers.length - 1 && isHeadingLike(line)) break;
       bodyLines.push(stripListMarker(line));
     }
@@ -107,8 +96,6 @@ export function parseServiceLines(rawText: string): RuleParseResult {
     }
   }
 
-  // Appendix/reference zone — grouped by heading, never becomes new
-  // Sections. Merged into matching order items in parse-service.ts.
   const lastMarker = markers[markers.length - 1];
   let refStart = rawLines.length;
   if (lastMarker) {
@@ -131,4 +118,4 @@ export function parseServiceLines(rawText: string): RuleParseResult {
   if (current) referenceBlocks.push(current);
 
   return { orderItems, referenceBlocks };
-} 
+}

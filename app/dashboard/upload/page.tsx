@@ -10,7 +10,7 @@ export default function UploadPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [sections, setSections] = useState<Section[]>([]);
   const [needsReview, setNeedsReview] = useState(0);
-  const [dropped, setDropped] = useState<string[]>([]);
+  const [autoAdded, setAutoAdded] = useState<string[]>([]);
 
   async function handleFile(file: File) {
     setStatus('extracting');
@@ -22,7 +22,7 @@ export default function UploadPage() {
       const { result } = await createProgramFromText('test-workspace', file.name, text);
       setSections(result.sections);
       setNeedsReview(result.needsReview);
-      setDropped(result.droppedReferenceBlocks ?? []);
+      setAutoAdded(result.autoAddedTitles ?? []);
       setStatus('done');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong.');
@@ -57,9 +57,9 @@ export default function UploadPage() {
             {sections.length} sections found
             {needsReview > 0 && ` — ${needsReview} need review`}
           </p>
-          {dropped.length > 0 && (
+          {autoAdded.length > 0 && (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              {dropped.length} appendix section(s) found but not linked to an order item: {dropped.join(', ')}
+              {autoAdded.length} appendix section(s) auto-added as extra slides: {autoAdded.join(', ')}
             </p>
           )}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>

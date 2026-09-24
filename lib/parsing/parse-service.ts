@@ -1,27 +1,50 @@
 import type { Program, Section } from '../db/schema';
-import { parseLines } from './rule-parser';
+import { parseServiceLines } from './rule-parser';
+import { matchSectionType } from './section-patterns';
+import { classifyWithAi } from './ai-fallback';
 
 export interface ParseResult {
   sections: Section[];
-  needsReview: number; // count of sections with confidence 0 — surfaced by Pre-Flight later (Part C4)
+  needsReview: number;
+  aiAssisted: number;
+  droppedReferenceBlocks: string[]; // appendix headings that didn't match any order item — surfaced honestly, not silently lost (Pre-Flight spirit, Part C4)
 }
 
-// Rule-based only for now. Low-confidence lines are kept as type 'other' /
-// resolved: false rather than dropped, so nothing from the original
-// programme silently disappears — Pre-Flight (Phase 7) surfaces these for
-// manual fixing. An AI fallback slots in here in Round 2 without changing
-// this function's signature.
-export function parseServiceText(programId: Program['id'], rawText: string): ParseResult {
-  const parsed = parseLines(rawText);
+export async function parseServiceText(programId: Program['id'], rawText: string): Promise<ParseResult> {
+  const { orderItems: parsed, referenceBlocks } = parseServiceLines(rawText);
 
-  const sections: Section[] = parsed.map((p, index) => ({
-    id: crypto.randomUUID(),
-    programId,
-    order: index,
-    ...p.section,
-  }));
+  const lowConfidenceIndices = parsed.map((p, i) => (p.confidence === 0 ? i : -1)).filter((i) => i !== -1);
+  let aiAssisted = 0;
 
-  const needsReview = parsed.filter((p) => p.confidence === 0).length;
+  if (lowConfidenceIndices.length > 0) {
+    const linesToClassify = lowConfidenceIndices.map((i) => parsed[i].section.title);
+    const aiResults = await classifyWithAi(linesToClassify);
 
-  return { sections, needsReview };
+    if (aiResults) {
+      for (const result of aiResults) {
+        const originalIndex = lowConfidenceIndices[result.index];
+        if (originalIndex === undefined) continue;
+        const keptFullText = parsed[originalIndex].section.fullText;
+        parsed[originalIndex] = {
+          section: { type: result.type, title: result.title, reference: result.reference, fullText: keptFullText, resolved: false },
+          confidence: result.type === 'other' ? 0 : 1,
+        };
+        if (result.type !== 'other') aiAssisted++;
+      }
+    }
+  }
+
+  const sections: Section[] = parsed.map((p, index) => ({ id: crypto.randomUUID(), programId, order: index, ...p.section }));
+
+  const droppedReferenceBlocks: string[] = [];
+  for (const block of referenceBlocks) {
+    const type = matchSectionType(block.heading);
+    const target = type ? sections.find((s) => s.type === type) : undefined;
+    if (target) target.fullText = block.body;
+    else droppedReferenceBlocks.push(block.heading);
+  }
+
+  const needsReview = parsed.filter((p) => p.confidence === 0.5 || (p.confidence === 0 && p.section.type !== 'other')).length;
+
+  return { sections, needsReview, aiAssisted, droppedReferenceBlocks };
 }

@@ -14,9 +14,10 @@ export interface Section {
   id: string;
   programId: string;
   order: number;
-  type: 'welcome' | 'hymn' | 'reading' | 'psalm' | 'creed' | 'collect' | 'sermon' | 'benediction' | 'other';
+  type: 'welcome' | 'hymn' | 'reading' | 'psalm' | 'creed' | 'collect' | 'sermon' | 'benediction' | 'response' | 'other';
   title: string;
   reference?: string;
+  fullText?: string;
   resolvedContentId?: string;
   resolved: boolean;
 }

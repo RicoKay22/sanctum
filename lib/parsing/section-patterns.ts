@@ -2,12 +2,11 @@ import type { Section } from '../db/schema';
 
 type SectionType = Section['type'];
 
-// Ordered by specificity — more specific patterns first, so "Opening Hymn"
-// matches hymn before a looser "opening" pattern could steal it.
 export const SECTION_TYPE_PATTERNS: { type: SectionType; pattern: RegExp }[] = [
   { type: 'hymn', pattern: /\b(opening|closing|processional|recessional|entrance|offertory|communion)?\s*hymn\b/i },
   { type: 'psalm', pattern: /\bpsalm\b/i },
   { type: 'creed', pattern: /\b(apostles'?|nicene)\s*creed\b/i },
+  { type: 'response', pattern: /\bcommon responses?\b|\bversicles?\b|\bresponsory\b/i },
   { type: 'collect', pattern: /\bcollect\b/i },
   { type: 'reading', pattern: /\b(old testament|new testament|epistle|gospel|first lesson|second lesson|first reading|second reading)\b/i },
   { type: 'sermon', pattern: /\b(sermon|homily|message)\b/i },
@@ -22,7 +21,6 @@ export function matchSectionType(label: string): SectionType | null {
   return null;
 }
 
-// Matches "Isaiah 6:1-8", "1 Corinthians 13:4-7", "John 15:1"
 const BIBLE_REF_PATTERN = /([1-3]?\s?[A-Za-z]+)\s+(\d+):(\d+)(?:[-–](\d+))?/;
 
 export interface ParsedBibleRef {
@@ -43,7 +41,6 @@ export function extractBibleReference(text: string): ParsedBibleRef | null {
   };
 }
 
-// Matches a standalone hymn number: "245", "Hymn 245", "Hymn No. 245"
 const HYMN_NUMBER_PATTERN = /\b(\d{1,3})\b/;
 
 export function extractHymnNumber(text: string): number | null {

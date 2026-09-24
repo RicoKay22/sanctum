@@ -5,14 +5,12 @@ import { extractText } from '../../../lib/parsing/extract-text';
 import { createProgramFromText } from '../../../lib/parsing/create-program';
 import type { Section } from '../../../lib/db/schema';
 
-// Round 2 test harness — a real, working upload flow. UI polish and the
-// "not found — add it" hymn form come in Phase 5; this round's job is
-// proving extraction + parsing actually work end to end on real files.
 export default function UploadPage() {
   const [status, setStatus] = useState<'idle' | 'extracting' | 'parsing' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [sections, setSections] = useState<Section[]>([]);
   const [needsReview, setNeedsReview] = useState(0);
+  const [dropped, setDropped] = useState<string[]>([]);
 
   async function handleFile(file: File) {
     setStatus('extracting');
@@ -21,11 +19,10 @@ export default function UploadPage() {
       const text = await extractText(file);
       setStatus('parsing');
 
-      // Placeholder workspaceId until Phase 5 wires this to the real
-      // signed-in workspace — this round is testing extraction/parsing only.
       const { result } = await createProgramFromText('test-workspace', file.name, text);
       setSections(result.sections);
       setNeedsReview(result.needsReview);
+      setDropped(result.droppedReferenceBlocks ?? []);
       setStatus('done');
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong.');
@@ -37,7 +34,7 @@ export default function UploadPage() {
     <main style={{ padding: '2rem', maxWidth: 720 }}>
       <h1 style={{ fontFamily: 'var(--font-serif)' }}>Upload a programme</h1>
       <p style={{ color: 'var(--text-muted)' }}>
-        PDF, JPEG, PNG, or plain text — max 10MB. Round 2 test harness.
+        PDF, JPEG, PNG, or plain text — max 10MB. Round 4 test harness.
       </p>
 
       <input
@@ -60,6 +57,11 @@ export default function UploadPage() {
             {sections.length} sections found
             {needsReview > 0 && ` — ${needsReview} need review`}
           </p>
+          {dropped.length > 0 && (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              {dropped.length} appendix section(s) found but not linked to an order item: {dropped.join(', ')}
+            </p>
+          )}
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
             <tbody>
               {sections.map((s) => (
@@ -70,6 +72,9 @@ export default function UploadPage() {
                   </td>
                   <td style={{ padding: '0.5rem' }}>{s.title}</td>
                   <td style={{ padding: '0.5rem', color: 'var(--text-muted)' }}>{s.reference ?? '—'}</td>
+                  <td style={{ padding: '0.5rem', color: 'var(--text-muted)', maxWidth: 200, fontSize: '0.85rem' }}>
+                    {s.fullText ? `${s.fullText.slice(0, 60)}${s.fullText.length > 60 ? '…' : ''}` : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>

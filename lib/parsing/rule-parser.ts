@@ -64,14 +64,29 @@ function parseFlatFallback(rawLines: string[]): ParsedLine[] {
 export function parseServiceLines(rawText: string): RuleParseResult {
   const rawLines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
 
-  const markers: { index: number; num: number; title: string }[] = [];
+    const markers: { index: number; num: number; title: string }[] = [];
   let expected = 1;
+  let insideHymnBody = false;
+
   for (let i = 0; i < rawLines.length; i++) {
     const match = rawLines[i].match(TOP_LEVEL_MARKER);
-    if (match && parseInt(match[1], 10) === expected) {
-      markers.push({ index: i, num: expected, title: match[2].trim() });
-      expected++;
+    if (!match || parseInt(match[1], 10) !== expected) continue;
+
+    const title = match[2].trim();
+
+    // Inside a hymn's own verses, only accept a new top-level item if it
+    // has strong independent evidence of being a real heading — otherwise
+    // a hymn's internal verse numbering (which restarts at 1) can collide
+    // with the real order-of-service numbering.
+    if (insideHymnBody) {
+      const looksLikeHeading = title === title.toUpperCase() && /[A-Z]/.test(title);
+      const knownType = matchSectionType(title);
+      if (!looksLikeHeading && !knownType) continue;
     }
+
+    markers.push({ index: i, num: expected, title });
+    expected++;
+    insideHymnBody = matchSectionType(title) === 'hymn';
   }
 
   if (markers.length < 3) {

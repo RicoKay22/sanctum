@@ -1,5 +1,5 @@
 const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'text/plain'];
-const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB — Part C5
+const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
 export async function extractText(file: File): Promise<string> {
   if (!ALLOWED_TYPES.includes(file.type)) {
@@ -51,13 +51,6 @@ function reconstructLines(items: unknown[]): string {
   return lines.map((l) => l.parts.sort((a, b) => a.x - b.x).map((p) => p.str).join(' ')).join('\n');
 }
 
-// Image extraction now goes through the /api/extract-image Server Action
-// route instead of Tesseract — Gemini's vision model handles real-world
-// photo conditions (multi-column layouts, uneven lighting, skewed angles)
-// far better than traditional OCR, and it's the same free-tier API already
-// used for classification (ai-fallback.ts). Falls back to Tesseract only
-// if the API call fails outright (offline, rate-limited, no key set) —
-// degraded output beats no output, matching the Round 4 fallback philosophy.
 async function extractFromImage(file: File): Promise<string> {
   try {
     const formData = new FormData();

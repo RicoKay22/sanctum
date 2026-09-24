@@ -28,10 +28,6 @@ function stripListMarker(line: string): string {
   return line.replace(/^\s*(?:\d+\.|\(?[a-z]\)\.?|\(?[ivxlcdm]+\)\.?|[-–•])\s+/i, '').trim();
 }
 
-// Fallback for input where strict sequential numbering (1. 2. 3...) can't
-// be found — typically OCR-garbled images where digits/periods get dropped
-// or misread. Classifies every line independently instead of returning
-// nothing. Worse output beats empty output.
 function parseFlatFallback(rawLines: string[]): ParsedLine[] {
   return rawLines.map((rawLine) => {
     const line = stripListMarker(rawLine);

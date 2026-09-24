@@ -33,10 +33,6 @@ async function extractFromPdf(file: File): Promise<string> {
   return fullText;
 }
 
-// pdf.js text items carry only x/y positions, not line breaks — a page of
-// text comes back as one flat list of fragments. Group fragments into lines
-// by shared y-position, then sort each line left-to-right by x-position.
-// This was the bug behind the "everything in one blob" test result.
 function reconstructLines(items: unknown[]): string {
   const Y_TOLERANCE = 2;
   const lines: { y: number; parts: { x: number; str: string }[] }[] = [];
@@ -47,21 +43,34 @@ function reconstructLines(items: unknown[]): string {
     const [, , , , x, y] = item.transform;
 
     let line = lines.find((l) => Math.abs(l.y - y) < Y_TOLERANCE);
-    if (!line) {
-      line = { y, parts: [] };
-      lines.push(line);
-    }
+    if (!line) { line = { y, parts: [] }; lines.push(line); }
     line.parts.push({ x, str: item.str });
   }
 
-  // PDF y-axis increases upward — sort top-to-bottom, then left-to-right.
   lines.sort((a, b) => b.y - a.y);
-  return lines
-    .map((l) => l.parts.sort((a, b) => a.x - b.x).map((p) => p.str).join(' '))
-    .join('\n');
+  return lines.map((l) => l.parts.sort((a, b) => a.x - b.x).map((p) => p.str).join(' ')).join('\n');
 }
 
+// Image extraction now goes through the /api/extract-image Server Action
+// route instead of Tesseract — Gemini's vision model handles real-world
+// photo conditions (multi-column layouts, uneven lighting, skewed angles)
+// far better than traditional OCR, and it's the same free-tier API already
+// used for classification (ai-fallback.ts). Falls back to Tesseract only
+// if the API call fails outright (offline, rate-limited, no key set) —
+// degraded output beats no output, matching the Round 4 fallback philosophy.
 async function extractFromImage(file: File): Promise<string> {
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch('/api/extract-image', { method: 'POST', body: formData });
+    if (res.ok) {
+      const { text } = await res.json();
+      if (text?.trim()) return text;
+    }
+  } catch {
+    // fall through to Tesseract below
+  }
+
   const Tesseract = await import('tesseract.js');
   const { data } = await Tesseract.recognize(file, 'eng');
   return data.text;

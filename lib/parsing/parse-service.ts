@@ -1,6 +1,6 @@
 import type { Program, Section } from '../db/schema';
 import { parseServiceLines } from './rule-parser';
-import { matchSectionType } from './section-patterns';
+import { matchSectionType, extractHymnReference } from './section-patterns';
 import { classifyWithAi } from './ai-fallback';
 
 export interface ParseResult {
@@ -8,6 +8,10 @@ export interface ParseResult {
   needsReview: number;
   aiAssisted: number;
   autoAddedTitles: string[];
+}
+
+function hymnKeyFromDisplay(display: string): string {
+  return display.replace(/\s+/g, '').toUpperCase();
 }
 
 export async function parseServiceText(programId: Program['id'], rawText: string): Promise<ParseResult> {
@@ -39,7 +43,22 @@ export async function parseServiceText(programId: Program['id'], rawText: string
   const autoAddedTitles: string[] = [];
   for (const block of referenceBlocks) {
     const type = matchSectionType(block.heading);
-    const target = type ? sections.find((s) => s.type === type) : undefined;
+    let target: Section | undefined;
+
+    // Multiple hymns per service is the normal case — match by the actual
+    // book code + number (e.g. "CONH 418") rather than "first hymn found",
+    // which would wrongly attach one hymn's lyrics to every hymn slot.
+    if (type === 'hymn') {
+      const blockKey = extractHymnReference(block.heading)?.key;
+      if (blockKey) {
+        target = sections.find((s) => s.type === 'hymn' && s.reference && hymnKeyFromDisplay(s.reference) === blockKey);
+      }
+      if (!target) {
+        target = sections.find((s) => s.type === 'hymn' && !s.fullText);
+      }
+    } else if (type) {
+      target = sections.find((s) => s.type === type);
+    }
 
     if (target) {
       target.fullText = block.body;

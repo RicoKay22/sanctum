@@ -1,11 +1,26 @@
 import Dexie, { type Table } from 'dexie';
 
-export interface Program { 
+export interface ProgramHeader {
+  time?: string;
+  theme?: string;
+  cantor?: string;
+  celebrant?: string;
+  otReader?: string;
+  ntReader?: string;
+  psalmReader?: string;
+  epistleReader?: string;
+  gospelReader?: string;
+  intercessionLeader?: string;
+  preacher?: string;
+}
+
+export interface Program {
   id: string;
   workspaceId: string;
   title: string;
   serviceDate: string;
   status: 'draft' | 'ready' | 'generated';
+  header?: ProgramHeader; // all fields optional — many churches won't use most of these (Part C)
   createdAt: string;
   expiresAt: string;
 }
@@ -16,7 +31,8 @@ export interface Section {
   order: number;
   type: 'welcome' | 'hymn' | 'reading' | 'psalm' | 'creed' | 'collect' | 'sermon' | 'benediction' | 'response' | 'other';
   title: string;
-  reference?: string;
+  reference?: string; // for hymns: the book code + number, e.g. "CONH 418"; for readings/psalm: the Bible reference
+  readerName?: string; // who's reading/leading this item — cross-referenced from the header block where available
   fullText?: string;
   resolvedContentId?: string;
   resolved: boolean;
@@ -26,7 +42,7 @@ export interface ContentItem {
   id: string;
   type: 'bible' | 'hymn' | 'collect' | 'creed';
   key: string;
-  translation?: string; // bible entries only ('KJV' | 'WEB' | ...)
+  translation?: string;
   title: string;
   body: string;
   source: 'bundled' | 'fetched';
@@ -39,7 +55,6 @@ export interface HymnalEdition {
   region?: string;
 }
 
-// Local mirror of a hymnal's number -> content_library mapping.
 export interface HymnNumbering {
   id: string;
   hymnalEditionId: string;
@@ -77,7 +92,10 @@ class SanctumDB extends Dexie {
       hymnalEditions: 'id, name',
       hymnNumbering: 'id, [hymnalEditionId+number], contentId',
     });
+    // v3: Program.header and Section.readerName are plain object/string
+    // fields, not indexed — no store definition change needed, Dexie
+    // handles new non-indexed fields on existing tables automatically.
   }
 }
 
-export const db = new SanctumDB(); 
+export const db = new SanctumDB();

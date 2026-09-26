@@ -1,5 +1,5 @@
 import type { Section } from '../db/schema';
-import { matchSectionType, extractBibleReference, extractHymnNumber } from './section-patterns';
+import { matchSectionType, extractBibleReference, extractHymnReference } from './section-patterns';
 
 export interface ParsedLine {
   section: Omit<Section, 'id' | 'programId' | 'order'>;
@@ -51,10 +51,10 @@ function parseFlatFallback(rawLines: string[]): ParsedLine[] {
       };
     }
     if (type === 'hymn') {
-      const number = extractHymnNumber(value || line);
+      const hymnRef = extractHymnReference(value || line);
       return {
-        section: { type, title: label, reference: number ? String(number) : undefined, resolved: false },
-        confidence: number ? 1 : 0.5,
+        section: { type, title: label, reference: hymnRef?.display, resolved: false },
+        confidence: hymnRef ? 1 : 0.5,
       };
     }
     return { section: { type, title: value || label, resolved: false }, confidence: 1 };
@@ -64,7 +64,7 @@ function parseFlatFallback(rawLines: string[]): ParsedLine[] {
 export function parseServiceLines(rawText: string): RuleParseResult {
   const rawLines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
 
-    const markers: { index: number; num: number; title: string }[] = [];
+  const markers: { index: number; num: number; title: string }[] = [];
   let expected = 1;
   let insideHymnBody = false;
 
@@ -74,10 +74,6 @@ export function parseServiceLines(rawText: string): RuleParseResult {
 
     const title = match[2].trim();
 
-    // Inside a hymn's own verses, only accept a new top-level item if it
-    // has strong independent evidence of being a real heading — otherwise
-    // a hymn's internal verse numbering (which restarts at 1) can collide
-    // with the real order-of-service numbering.
     if (insideHymnBody) {
       const looksLikeHeading = title === title.toUpperCase() && /[A-Z]/.test(title);
       const knownType = matchSectionType(title);
@@ -130,10 +126,10 @@ export function parseServiceLines(rawText: string): RuleParseResult {
         confidence: ref ? 1 : 0.5,
       });
     } else if (type === 'hymn') {
-      const number = extractHymnNumber(combinedText);
+      const hymnRef = extractHymnReference(combinedText);
       orderItems.push({
-        section: { type, title: label, reference: number ? String(number) : undefined, fullText, resolved: false },
-        confidence: number ? 1 : 0.5,
+        section: { type, title: label, reference: hymnRef?.display, fullText, resolved: false },
+        confidence: hymnRef ? 1 : 0.5,
       });
     } else if (type === 'other') {
       orderItems.push({

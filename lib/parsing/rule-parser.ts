@@ -19,7 +19,7 @@ export interface RuleParseResult {
 const TOP_LEVEL_MARKER = /^(\d{1,2})\.\s+(.*)/;
 
 function isHeadingLike(line: string): boolean {
-  const allCaps = line === line.toUpperCase() && /[A-Z]/.test(line);
+  const allCaps = line.length >= 5 && line === line.toUpperCase() && /[A-Z]/.test(line);
   const shortKnownLabel = line.length <= 40 && !line.includes(':') && matchSectionType(line) !== null;
   return allCaps || shortKnownLabel;
 }

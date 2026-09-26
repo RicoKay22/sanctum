@@ -14,6 +14,10 @@ function hymnKeyFromDisplay(display: string): string {
   return display.replace(/\s+/g, '').toUpperCase();
 }
 
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 export async function parseServiceText(programId: Program['id'], rawText: string): Promise<ParseResult> {
   const { orderItems: parsed, referenceBlocks } = parseServiceLines(rawText);
 
@@ -42,22 +46,37 @@ export async function parseServiceText(programId: Program['id'], rawText: string
 
   const autoAddedTitles: string[] = [];
   for (const block of referenceBlocks) {
+    // A heading with no real body carries nothing useful — skip it rather
+    // than let it consume a match slot with empty content (Part K).
+    if (!block.body.trim()) continue;
+
     const type = matchSectionType(block.heading);
+    const blockNorm = normalizeForMatch(block.heading);
     let target: Section | undefined;
 
-    // Multiple hymns per service is the normal case — match by the actual
-    // book code + number (e.g. "CONH 418") rather than "first hymn found",
-    // which would wrongly attach one hymn's lyrics to every hymn slot.
+    // 1. Hymn book code, when present (e.g. "SERMON CONH 418") — most precise.
     if (type === 'hymn') {
       const blockKey = extractHymnReference(block.heading)?.key;
       if (blockKey) {
         target = sections.find((s) => s.type === 'hymn' && s.reference && hymnKeyFromDisplay(s.reference) === blockKey);
       }
-      if (!target) {
-        target = sections.find((s) => s.type === 'hymn' && !s.fullText);
-      }
-    } else if (type) {
-      target = sections.find((s) => s.type === type);
+    }
+
+    // 2. Fuzzy title match — "Withdrawal Hymn" heading -> order item titled
+    // "Withdrawal Hymn", "Collect for Peace" -> order item mentioning
+    // "Peace". Handles documents with no book codes at all, and correctly
+    // distinguishes multiple hymns/collects from each other by name.
+    if (!target) {
+      target = sections.find((s) => {
+        if (s.fullText || (type && s.type !== type)) return false;
+        const titleNorm = normalizeForMatch(s.title);
+        return titleNorm.length > 2 && (blockNorm.includes(titleNorm) || titleNorm.includes(blockNorm));
+      });
+    }
+
+    // 3. Last resort: first same-typed section still missing content.
+    if (!target && type) {
+      target = sections.find((s) => s.type === type && !s.fullText);
     }
 
     if (target) {
